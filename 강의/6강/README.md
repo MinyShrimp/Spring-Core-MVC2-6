@@ -111,6 +111,228 @@ public class HomeController {
 
 ## 회원 가입
 
+### Member
+
+```java
+
+@Setter
+@Getter
+public class Member {
+    private Long id;
+
+    @NotEmpty
+    private String loginId; // 로그인 ID
+
+    @NotEmpty
+    private String name;    // 사용자 이름
+
+    @NotEmpty
+    private String password;
+
+    public Member(String loginId, String name, String password) {
+        this.loginId = loginId;
+        this.name = name;
+        this.password = password;
+    }
+}
+```
+
+### MemberRepository
+
+```java
+/**
+ * 동시성 문제가 고려되어 있지 않음.
+ * 실무에서는 ConcurrentHashMap, AtomicLong 사용 고려
+ */
+@Slf4j
+@Repository
+public class MemberRepository {
+    private static final Map<Long, Member> store = new HashMap<>();
+    private static long sequence = 0L;
+
+    /**
+     * 저장
+     *
+     * @param member: 저장할 Member 객체
+     * @return 저장된 Member
+     */
+    public Member save(Member member) {
+        member.setId(++sequence);
+        log.info("Member save: {}", member);
+        store.put(member.getId(), member);
+        return member;
+    }
+
+    /**
+     * Member.loginId 가 아닌, Member.id 를 기반으로 찾음
+     *
+     * @param id: Member.id
+     * @return 찾은 Member
+     */
+    public Member findById(Long id) {
+        return store.get(id);
+    }
+
+    /**
+     * Member.id 가 아닌, Member.loginId
+     *
+     * @param loginId: Member.loginId
+     * @return 찾은 Member
+     */
+    public Optional<Member> findByLongId(String loginId) {
+        return findAll().stream()
+                .filter(m -> m.getLoginId().equals(loginId))
+                .findFirst();
+    }
+
+    /**
+     * 저장된 모든 Member List 를 새로 생성해서 반환
+     *
+     * @return 저장된 모든 Member List
+     */
+    public List<Member> findAll() {
+        return new ArrayList<>(store.values());
+    }
+
+    /**
+     * 저장된 모든 Member 제거, 테스트 용도
+     */
+    public void clearStore() {
+        store.clear();
+    }
+}
+```
+
+### MemberController
+
+```java
+
+@Controller
+@RequiredArgsConstructor
+@RequestMapping("/members")
+public class MemberController {
+    private final MemberRepository memberRepository;
+
+    @GetMapping("/add")
+    public String addForm(
+            @ModelAttribute("member") Member member
+    ) {
+        return "members/addMemberForm";
+    }
+
+    @PostMapping("/add")
+    public String save(
+            @Validated @ModelAttribute Member member,
+            BindingResult bindingResult
+    ) {
+        if (bindingResult.hasErrors()) {
+            return "members/addMemberForm";
+        }
+
+        return "redirect:/";
+    }
+}
+```
+
+### addMemberForm.html
+
+```html
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <link href="../css/bootstrap.min.css"
+          rel="stylesheet" th:href="@{/css/bootstrap.min.css}">
+    <link href="../css/main.css"
+          rel="stylesheet" th:href="@{/css/main.css}">
+</head>
+<body>
+<div class="container">
+    <div class="py-5 text-center">
+        <h2>회원 가입</h2>
+    </div>
+    <h4 class="mb-3">회원 정보 입력</h4>
+    <form action="" method="post" th:action th:object="${member}">
+        <div th:if="${#fields.hasGlobalErrors()}">
+            <p class="field-error"
+               th:each="err : ${#fields.globalErrors()}"
+               th:text="${err}"
+            >전체 오류 메시지</p>
+        </div>
+        <div>
+            <label for="loginId">로그인 ID</label>
+            <input class="form-control"
+                   id="loginId"
+                   th:errorclass="field-error"
+                   th:field="*{loginId}"
+                   type="text">
+            <div class="field-error" th:errors="*{loginId}"/>
+        </div>
+        <div>
+            <label for="password">비밀번호</label>
+            <input class="form-control"
+                   id="password"
+                   th:errorclass="field-error"
+                   th:field="*{password}"
+                   type="password">
+            <div class="field-error" th:errors="*{password}"/>
+        </div>
+        <div>
+            <label for="name">이름</label>
+            <input class="form-control"
+                   id="name"
+                   th:errorclass="field-error"
+                   th:field="*{name}"
+                   type="text">
+            <div class="field-error" th:errors="*{name}"/>
+        </div>
+        <hr class="my-4">
+        <div class="row">
+            <div class="col">
+                <button class="w-100 btn btn-primary btn-lg" type="submit">
+                    회원 가입
+                </button>
+            </div>
+            <div class="col">
+                <button class="w-100 btn btn-secondary btn-lg"
+                        onclick="location.href='items.html'"
+                        th:onclick="|location.href='@{/}'|"
+                        type="button">
+                    취소
+                </button>
+            </div>
+        </div>
+    </form>
+</div> <!-- /container -->
+</body>
+</html>
+```
+
+### TestDataInit
+
+```java
+
+@Component
+@RequiredArgsConstructor
+public class TestDataInit {
+    private final ItemRepository itemRepository;
+    private final MemberRepository memberRepository;
+
+    /**
+     * 테스트용 데이터 추가
+     */
+    @PostConstruct
+    public void init() {
+        // 아이템
+        itemRepository.save(new Item("itemA", 10000, 10));
+        itemRepository.save(new Item("itemB", 20000, 20));
+
+        // 맴버
+        memberRepository.save(new Member("test", "테스터", "test!"));
+    }
+}
+```
+
 ## 로그인 기능
 
 ## 로그인 처리하기 - 쿠키 사용
