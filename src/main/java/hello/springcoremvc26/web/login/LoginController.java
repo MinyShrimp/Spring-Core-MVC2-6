@@ -3,9 +3,9 @@ package hello.springcoremvc26.web.login;
 import hello.springcoremvc26.domain.login.LoginService;
 import hello.springcoremvc26.domain.member.Member;
 import hello.springcoremvc26.dto.login.LoginDto;
-import hello.springcoremvc26.web.session.SessionManager;
+import hello.springcoremvc26.web.SessionConst;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 @RequiredArgsConstructor
 public class LoginController {
     private final LoginService loginService;
-    private final SessionManager sessionManager;
 
     @GetMapping("/login")
     public String loginForm(
@@ -33,7 +32,7 @@ public class LoginController {
     public String login(
             @Validated @ModelAttribute("loginForm") LoginDto form,
             BindingResult bindingResult,
-            HttpServletResponse resp
+            HttpServletRequest req
     ) {
         if (bindingResult.hasErrors()) {
             return "login/loginForm";
@@ -49,8 +48,10 @@ public class LoginController {
             return "login/loginForm";
         }
 
-        // 로그인 성공 처리 - 세션관리자 사용
-        sessionManager.createSession(loginMember, resp);
+        // 로그인 성공 처리 - HttpSession 사용
+        HttpSession session = req.getSession();
+        // 세션에 로그인 회원 정보 보관
+        session.setAttribute(SessionConst.LOGIN_MEMBER, loginMember);
 
         return "redirect:/";
     }
@@ -59,7 +60,11 @@ public class LoginController {
     public String logout(
             HttpServletRequest req
     ) {
-        sessionManager.expire(req);
+        // 세션을 삭제한다.
+        HttpSession session = req.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
         return "redirect:/";
     }
 }
