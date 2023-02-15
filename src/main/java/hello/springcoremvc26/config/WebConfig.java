@@ -18,4 +18,15 @@ public class WebConfig {
 
         return bean;
     }
+
+    @Bean
+    public FilterRegistrationBean<Filter> loginCheckFilter() {
+        FilterRegistrationBean<Filter> bean = new FilterRegistrationBean<>();
+
+        bean.setFilter(new LoginCheckFilter());
+        bean.setOrder(2);
+        bean.addUrlPatterns("/*");
+
+        return bean;
+    }
 }
