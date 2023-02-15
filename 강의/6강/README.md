@@ -774,6 +774,131 @@ public String logout(
 
 ## 로그인 처리하기 - 세션 직접 만들기
 
+세션을 직접 개발해서 적용해보자.
+
+세션 관리는 크게 다음 3가지 기능을 제공하면 된다.
+
+* **세션 생성**
+    * sessionId 생성 (임의의 추정 불가능한 랜덤 값)
+    * 세션 저장소에 sessionId와 보관할 값 저장
+    * sessionId로 응답 쿠키를 생성해서 클라이언트에 전달
+* **세션 조회**
+    * 클라이언트가 요청한 sessionId 쿠키의 값으로, 세션 저장소에 보관한 값 조회
+* **세션 만료**
+    * 클라이언트가 요청한 sessionId 쿠키의 값으로, 세션 저장소에 보관한 sessionId와 값 제거
+
+### SessionManager
+
+```java
+/**
+ * 세션 관리 매니저
+ */
+@Component
+public class SessionManager {
+    public static final String SESSION_COOKIE_NAME = "mySessionId";
+
+    private final Map<String, Object> sessionStore = new ConcurrentHashMap<>();
+
+    /**
+     * 세션 생성
+     *
+     * @param value 저장할 값
+     * @param resp  HTTP Servlet Response
+     */
+    public void createSession(
+            Object value,
+            HttpServletResponse resp
+    ) {
+        // 세션 ID를 생성하고, 값을 세션에 저장
+        String sessionId = UUID.randomUUID().toString();
+        sessionStore.put(sessionId, value);
+
+        // 쿠키 생성
+        Cookie mySessionCookie = new Cookie(SESSION_COOKIE_NAME, sessionId);
+        resp.addCookie(mySessionCookie);
+    }
+
+    /**
+     * 세션 조회
+     *
+     * @param req HTTP Servlet Request
+     * @return 조회된 세션에 대한 정보(값)
+     */
+    public Object getSession(
+            HttpServletRequest req
+    ) {
+        return findCookie(req, SESSION_COOKIE_NAME)
+                .map(value -> sessionStore.get(value.getValue()))
+                .orElse(null);
+    }
+
+    /**
+     * 세션 만료
+     *
+     * @param req HTTP Servlet Request
+     */
+    public void expire(
+            HttpServletRequest req
+    ) {
+        findCookie(req, SESSION_COOKIE_NAME)
+                .ifPresent(cookie -> sessionStore.remove(cookie.getValue()));
+    }
+
+    /**
+     * 쿠키 찾기
+     *
+     * @param req        HTTP Servlet Request
+     * @param cookieName 찾을 쿠키 이름
+     * @return 찾은 쿠키
+     */
+    private Optional<Cookie> findCookie(
+            HttpServletRequest req,
+            String cookieName
+    ) {
+        if (req.getCookies() == null) {
+            return Optional.empty();
+        }
+
+        return Arrays.stream(req.getCookies())
+                .filter(cookie -> cookie.getName().equals(cookieName))
+                .findAny();
+    }
+}
+```
+
+### SessionManagerTest
+
+```java
+class SessionManagerTest {
+    SessionManager sessionManager = new SessionManager();
+
+    @Test
+    void sessionTest() {
+        // 세션 생성
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        Member member = new Member("test", "테스터 1", "test!");
+        sessionManager.createSession(member, resp);
+
+        // 요청에 응답 쿠키 저장
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setCookies(resp.getCookies());
+
+        // 세션 조회
+        Object result = sessionManager.getSession(req);
+        assertThat(result).isEqualTo(member);
+
+        // 세션 만료
+        sessionManager.expire(req);
+        Object expired = sessionManager.getSession(req);
+        assertThat(expired).isNull();
+    }
+}
+```
+
+간단하게 테스트를 진행해보자.
+여기서는 `HttpServletRequest`, `HttpServletResponse` 객체를 직접 사용할 수 없기 때문에
+테스트에서 비슷한 역할을 해주는 가짜 `MockHttpServletRequest`, `MockHttpServletResponse` 를 사용했다.
+
 ## 로그인 처리하기 - 직접 만든 세션 적용
 
 ## 로그인 처리하기 - 서블릿 HTTP 세션 1
