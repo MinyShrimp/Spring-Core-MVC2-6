@@ -335,6 +335,164 @@ public class TestDataInit {
 
 ## 로그인 기능
 
+### LoginService
+
+```java
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class LoginService {
+    private final MemberRepository memberRepository;
+
+    /**
+     * 로그인 비즈니스 로직
+     *
+     * @param loginId:  로그인 ID
+     * @param password: 로그인 비밀번호
+     * @return 성공: 로그인된 Member, 실패: null
+     */
+    public Member login(String loginId, String password) {
+        log.info("LoginService: '{}', '{}'", loginId, password);
+        return memberRepository.findByLongId(loginId)
+                .filter(m -> m.getPassword().equals(password))
+                .orElse(null);
+    }
+}
+```
+
+### LoginDto
+
+```java
+
+@Setter
+@Getter
+public class LoginDto {
+    @NotEmpty
+    private String loginId;
+
+    @NotEmpty
+    private String password;
+
+    public LoginForm(String loginId, String password) {
+        this.loginId = loginId;
+        this.password = password;
+    }
+}
+```
+
+### LoginController
+
+```java
+
+@Slf4j
+@Controller
+@RequiredArgsConstructor
+public class LoginController {
+    private final LoginService loginService;
+
+    @GetMapping("/login")
+    public String loginForm(
+            @ModelAttribute("loginForm") LoginDto form
+    ) {
+        return "login/loginForm";
+    }
+
+    @PostMapping("/login")
+    public String login(
+            @Validated @ModelAttribute("loginForm") LoginDto form,
+            BindingResult bindingResult
+    ) {
+        if (bindingResult.hasErrors()) {
+            return "login/loginForm";
+        }
+
+        // 로그인 시도
+        Member loginMember = loginService.login(form.getLoginId(), form.getPassword());
+        log.info("login? {}", loginMember);
+
+        // 로그인 실패 시
+        if (loginMember == null) {
+            bindingResult.reject("loginFail", "아이디 또는 비밀번호가 맞지 않습니다.");
+            return "login/loginForm";
+        }
+
+        // TODO: 로그인 성공 처리
+
+        return "redirect:/";
+    }
+}
+```
+
+### loginForm.html
+
+```html
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <link href="../css/bootstrap.min.css"
+          rel="stylesheet" th:href="@{/css/bootstrap.min.css}">
+    <link href="../css/main.css"
+          rel="stylesheet" th:href="@{/css/main.css}">
+</head>
+<body>
+<div class="container">
+    <div class="py-5 text-center">
+        <h2>로그인</h2>
+    </div>
+    <form action="item.html" method="post" th:action th:object="${loginForm}">
+        <div th:if="${#fields.hasGlobalErrors()}">
+            <p class="field-error" th:each="err : ${#fields.globalErrors()}"
+               th:text="${err}">전체 오류 메시지</p>
+        </div>
+        <div>
+            <label for="loginId">로그인 ID</label>
+            <input class="form-control"
+                   id="loginId"
+                   th:errorclass="field-error"
+                   th:field="*{loginId}"
+                   type="text">
+            <div class="field-error" th:errors="*{loginId}"/>
+        </div>
+        <div>
+            <label for="password">비밀번호</label>
+            <input class="form-control"
+                   id="password"
+                   th:errorclass="field-error"
+                   th:field="*{password}"
+                   type="password">
+            <div class="field-error" th:errors="*{password}"/>
+        </div>
+        <hr class="my-4">
+        <div class="row">
+            <div class="col">
+                <button class="w-100 btn btn-primary btn-lg" type="submit">
+                    로그인
+                </button>
+            </div>
+            <div class="col">
+                <button class="w-100 btn btn-secondary btn-lg"
+                        onclick="location.href='items.html'"
+                        th:onclick="|location.href='@{/}'|"
+                        type="button">취소
+                </button>
+            </div>
+        </div>
+    </form>
+</div> <!-- /container -->
+</body>
+</html>
+```
+
+### 실행
+
+실행해보면 로그인이 성공하면 홈으로 이동하고,
+로그인에 실패하면 "아이디 또는 비밀번호가 맞지 않습니다."라는 경고와 함께 로그인 폼이 나타난다.
+
+그런데 아직 로그인이 되면 홈 화면에 고객 이름이 보여야 한다는 요구사항을 만족하지 못한다.
+로그인의 상태를 유지하면서, 로그인에 성공한 사용자는 홈 화면에 접근시 고객의 이름을 보여주려면 어떻게 해야할까?
+
 ## 로그인 처리하기 - 쿠키 사용
 
 ## 쿠키와 보안 문제
