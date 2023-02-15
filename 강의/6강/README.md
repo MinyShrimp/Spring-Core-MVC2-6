@@ -495,6 +495,196 @@ public class LoginController {
 
 ## 로그인 처리하기 - 쿠키 사용
 
+> **참고**<br>
+> 여기서는 여러분이 쿠키의 기본 개념을 이해하고 있다고 가정한다.
+> 쿠키에 대해서는 [모든 개발자를 위한 HTTP 기본 지식](https://www.inflearn.com/course/http-%EC%9B%B9-%EB%84%A4%ED%8A%B8%EC%9B%8C%ED%81%AC)
+> 강의를 참고하자.
+> 혹시 잘 생각이 안나면 쿠키 관련 내용을 꼭! 복습하고 돌아오자.
+
+쿠키를 사용해서 로그인, 로그아웃 기능을 구현해보자.
+
+### 로그인 상태 유지하기
+
+로그인의 상태를 어떻게 유지할 수 있을까?
+HTTP 강의에서 일부 설명했지만, 쿼리 파라미터를 계속 유지하면서 보내는 것은 매우 어렵고 번거로운 작업이다.
+쿠키를 사용해보자.
+
+### 쿠키
+
+서버에서 로그인에 성공하면 HTTP 응답에 쿠키를 담아서 브라우저에 전달하자.
+그러면 브라우저는 앞으로 해당 쿠키를 지속해서 보내준다.
+
+#### 쿠키 생성
+
+![img_5.png](img_5.png)
+
+#### 클라이언트 쿠키 전달 1
+
+![img_6.png](img_6.png)
+
+#### 클라이언트 쿠키 전달 2
+
+![img_7.png](img_7.png)
+
+#### 쿠키에는 영속 쿠키와 세션 쿠키가 있다.
+
+* 영속 쿠키: 만료 날짜를 입력하면 해당 날짜까지 유지
+* 세션 쿠키: 만료 날짜를 생략하면 브라우저 종료시 까지만 유지
+
+브라우저 종료시 로그아웃이 되길 기대하므로, 우리에게 필요한 것은 세션 쿠키이다.
+
+### LoginController
+
+```java
+@PostMapping("/login")
+public String login(
+        @Validated @ModelAttribute("loginForm") LoginDto form,
+        BindingResult bindingResult,
+        HttpServletResponse resp
+) {
+    if (bindingResult.hasErrors()) {
+        return "login/loginForm";
+    }
+
+    // 로그인 시도
+    Member loginMember = loginService.login(form.getLoginId(), form.getPassword());
+    log.info("login? {}", loginMember);
+
+    // 로그인 실패 시
+    if (loginMember == null) {
+        bindingResult.reject("loginFail", "아이디 또는 비밀번호가 맞지 않습니다.");
+        return "login/loginForm";
+    }
+
+    // 로그인 성공 처리 - 쿠키 생성
+    Cookie idCookie = new Cookie("memberId", String.valueOf(loginMember.getId()));
+    resp.addCookie(idCookie);
+
+    return "redirect:/";
+}
+```
+
+#### 쿠키 생성 로직
+
+```java
+Cookie idCookie=new Cookie("memberId",String.valueOf(loginMember.getId()));
+resp.addCookie(idCookie);
+```
+
+로그인에 성공하면 쿠키를 생성하고 `HttpServletResponse` 에 담는다.
+쿠키 이름은 `memberId`이고, 값은 **회원의 `id`** 를 담아둔다.
+웹 브라우저는 종료 전까지 **회원의 `id`** 를 서버에 계속 보내줄 것이다.
+
+### 실행
+
+![img_8.png](img_8.png)
+
+### HomeController
+
+```java
+@Controller
+@RequiredArgsConstructor
+public class HomeController {
+    private final MemberRepository memberRepository;
+
+    @GetMapping("/")
+    public String homeLogin(
+            @CookieValue(name = "memberId", required = false) Long memberId,
+            Model model
+    ) {
+        if (memberId == null) {
+            return "home";
+        }
+
+        // 로그인
+        Member loginMember = memberRepository.findById(memberId);
+        if (loginMember == null) {
+            return "home";
+        }
+
+        model.addAttribute("member", loginMember);
+        return "loginHome";
+    }
+}
+```
+
+* `@CookieValue`를 사용하면 편리하게 쿠키를 조회할 수 있다.
+* 로그인 하지 않은 사용자도 홈에 접근할 수 있기 때문에, `required = false`를 사용한다.
+
+### loginHome.html
+
+```html
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <link href="../css/bootstrap.min.css"
+          rel="stylesheet" th:href="@{/css/bootstrap.min.css}">
+</head>
+<body>
+<div class="container" style="max-width: 600px">
+    <div class="py-5 text-center">
+        <h2>홈 화면</h2>
+    </div>
+    <h4 class="mb-3" th:text="|로그인: ${member.name}|">로그인 사용자 이름</h4>
+    <hr class="my-4">
+    <div class="row">
+        <div class="col">
+            <button class="w-100 btn btn-secondary btn-lg"
+                    th:onclick="|location.href='@{/items}'|"
+                    type="button">
+                상품 관리
+            </button>
+        </div>
+        <div class="col">
+            <form method="post" th:action="@{/logout}">
+                <button class="w-100 btn btn-dark btn-lg" type="submit">
+                    로그아웃
+                </button>
+            </form>
+        </div>
+    </div>
+    <hr class="my-4">
+</div> <!-- /container -->
+</body>
+</html>
+```
+
+### 실행
+
+![img_9.png](img_9.png)
+
+로그인에 성공하면 사용자 이름이 출력되면서 상품 관리, 로그아웃 버튼을 확인할 수 있다.
+로그인에 성공시 세션 쿠키가 지속해서 유지되고, 웹 브라우저에서 서버에 요청시 memberId 쿠키를 계속 보내준다.
+
+### 로그아웃 - LoginController
+
+```java
+private void expireCookie(
+        HttpServletResponse resp,
+        String cookieName
+) {
+    // 쿠키의 만료 시간을 0으로 만든다.
+    Cookie cookie = new Cookie(cookieName, null);
+    cookie.setMaxAge(0);
+    resp.addCookie(cookie);
+}
+
+@PostMapping("/logout")
+public String logout(
+        HttpServletResponse resp
+) {
+    expireCookie(resp, "memberId");
+    return "redirect:/";
+}
+```
+
+### 실행
+
+![img_10.png](img_10.png)
+
+로그아웃도 응답 쿠키를 생성하는데 `Max-Age=0` 를 확인할 수 있다. 해당 쿠키는 즉시 종료된다.
+
 ## 쿠키와 보안 문제
 
 ## 로그인 처리하기 - 세션 동작 방식
