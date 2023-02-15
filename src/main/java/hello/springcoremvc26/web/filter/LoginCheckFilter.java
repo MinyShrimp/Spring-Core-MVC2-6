@@ -1,4 +1,4 @@
-package hello.springcoremvc26.config;
+package hello.springcoremvc26.web.filter;
 
 import hello.springcoremvc26.web.SessionConst;
 import jakarta.servlet.*;
