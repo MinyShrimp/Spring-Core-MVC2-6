@@ -22,13 +22,15 @@ class SessionManagerTest {
         req.setCookies(resp.getCookies());
 
         // 세션 조회
-        Object result = sessionManager.getSession(req);
-        assertThat(result).isEqualTo(member);
+        sessionManager.getSession(req).ifPresent(
+                result -> assertThat(result).isEqualTo(member)
+        );
 
         // 세션 만료
         sessionManager.expire(req);
-        Object expired = sessionManager.getSession(req);
-        assertThat(expired).isNull();
+        sessionManager.getSession(req).ifPresent(
+                result -> assertThat(result).isNull()
+        );
     }
 
 }

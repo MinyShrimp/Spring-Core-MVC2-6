@@ -3,7 +3,8 @@ package hello.springcoremvc26.web.login;
 import hello.springcoremvc26.domain.login.LoginService;
 import hello.springcoremvc26.domain.member.Member;
 import hello.springcoremvc26.dto.login.LoginDto;
-import jakarta.servlet.http.Cookie;
+import hello.springcoremvc26.web.session.SessionManager;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 @RequiredArgsConstructor
 public class LoginController {
     private final LoginService loginService;
+    private final SessionManager sessionManager;
 
     @GetMapping("/login")
     public String loginForm(
@@ -47,28 +49,17 @@ public class LoginController {
             return "login/loginForm";
         }
 
-        // 로그인 성공 처리 - 쿠키 생성
-        Cookie idCookie = new Cookie("memberId", String.valueOf(loginMember.getId()));
-        resp.addCookie(idCookie);
+        // 로그인 성공 처리 - 세션관리자 사용
+        sessionManager.createSession(loginMember, resp);
 
         return "redirect:/";
     }
 
     @PostMapping("/logout")
     public String logout(
-            HttpServletResponse resp
+            HttpServletRequest req
     ) {
-        expireCookie(resp, "memberId");
+        sessionManager.expire(req);
         return "redirect:/";
-    }
-
-    private void expireCookie(
-            HttpServletResponse resp,
-            String cookieName
-    ) {
-        // 쿠키의 만료 시간을 0으로 만든다.
-        Cookie cookie = new Cookie(cookieName, null);
-        cookie.setMaxAge(0);
-        resp.addCookie(cookie);
     }
 }

@@ -45,12 +45,11 @@ public class SessionManager {
      * @param req HTTP Servlet Request
      * @return 조회된 세션에 대한 정보(값)
      */
-    public Object getSession(
+    public Optional<Object> getSession(
             HttpServletRequest req
     ) {
         return findCookie(req, SESSION_COOKIE_NAME)
-                .map(value -> sessionStore.get(value.getValue()))
-                .orElse(null);
+                .map(value -> sessionStore.get(value.getValue()));
     }
 
     /**
