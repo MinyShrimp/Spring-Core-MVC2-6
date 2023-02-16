@@ -875,3 +875,149 @@ LogInterceptor preHandle -> LoginCheckInterceptor preHandle -> return false;
 특별한 문제가 없다면 인터셉터를 사용하는 것이 좋다.
 
 ## ArgumentResolver 활용
+
+![img_2.png](img_2.png)
+
+[MVC 1편 - 6. 스프링 MVC - 기본 기능](https://github.com/MinyShrimp/Spring-Core-MVC-Six) -
+[요청 매핑 헨들러 어뎁터 구조](https://github.com/MinyShrimp/Spring-Core-MVC-Six/tree/main/%EA%B0%95%EC%9D%98/6%EA%B0%95#%EC%9A%94%EC%B2%AD-%EB%A7%A4%ED%95%91-%ED%97%A8%EB%93%A4%EB%9F%AC-%EC%96%B4%EB%8E%81%ED%84%B0-%EA%B5%AC%EC%A1%B0)
+에서 `ArgumentResolver`를 학습했다.
+
+`@Login`애노테이션이 있으면 직접 만든 `ArgumentResolver`가 동작해서
+자동으로 세션에 있는 로그인 회원을 찾아주고, 만약 세션에 없다면 `null`을 반환하도록 개발해보자.
+
+### HomeController
+
+```java
+@Controller
+@RequiredArgsConstructor
+public class HomeController {
+    @GetMapping("/")
+    public String homeLogin(
+            @Login Member loginMember,
+            Model model
+    ) {
+        // 세션이 없으면 home
+        if (loginMember == null) {
+            return "home";
+        }
+
+        model.addAttribute("member", loginMember);
+        return "loginHome";
+    }
+}
+```
+
+### @Login 애노테이션
+
+```java
+@Target(ElementType.PARAMETER)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Login { }
+```
+
+* `@Target(ElementType.PARAMETER)`
+    * 파라미터에만 사용
+* `@Retention(RetentionPolicy.RUNTIME)`
+    * 리플렉션 등을 활용할 수 있도록 런타임까지 애노테이션 정보가 남아있음
+
+### LoginMemberArgumentResolver
+
+```java
+@Slf4j
+public class LoginMemberArgumentResolver implements HandlerMethodArgumentResolver {
+    /**
+     * `@Login Member`인지 확인
+     */
+    @Override
+    public boolean supportsParameter(
+            MethodParameter parameter
+    ) {
+        log.info("LoginMemberArgumentResolver supportsParameter");
+
+        // 파라미터에 @Login 애노테이션이 있는가?
+        boolean hasLoginAnnotation = parameter.hasParameterAnnotation(Login.class);
+        // 파라미터 type 이 Member type 인가?
+        boolean hasMemberType = Member.class.isAssignableFrom(parameter.getParameterType());
+
+        return hasLoginAnnotation && hasMemberType;
+    }
+
+    /**
+     * 컨트롤러 호출 직전에 호출되어서 필요한 파라미터 정보를 생성해준다.
+     * 여기서는 세션에 있는 로그인 회원 정보인 `member`객체를 찾아서 반환해준다.
+     * 이후, 스프링 MVC는 컨트롤러의 메서드를 호출하면서 여기에서 반환된 `member`객체를 파라미터에 전달해준다.
+     */
+    @Override
+    public Object resolveArgument(
+            MethodParameter parameter,
+            ModelAndViewContainer mavContainer,
+            NativeWebRequest webRequest,
+            WebDataBinderFactory binderFactory
+    ) throws Exception {
+        log.info("LoginMemberArgumentResolver resolveArgument");
+
+        // 세션에서 맴버 가져오기
+        HttpServletRequest request = (HttpServletRequest) webRequest.getNativeRequest();
+        HttpSession session = request.getSession(false);
+
+        // 세션이 있으면, member 반환.
+        // 세션이 없으면, null 반환.
+        return session != null ? session.getAttribute(SessionConst.LOGIN_MEMBER) : null;
+    }
+}
+```
+
+* `supportsParameter()`
+    * `@Login` 애노테이션이 있으면서 `Member` 타입이면 해당 `ArgumentResolver`가 사용된다.
+* `resolveArgument()`
+    * 컨트롤러 호출 직전에 호출 되어서 필요한 파라미터 정보를 생성해준다.
+    * 여기서는 세션에 있는 로그인 회원 정보인 `member`객체를 찾아서 반환해준다.
+    * 이후 스프링 MVC는 컨트롤러의 메서드를 호출하면서 여기에서 반환된 `member`객체를 파라미터에 전달해준다.
+
+### ArgumentConfig
+
+```java
+@Configuration
+public class ArgumentConfig implements WebMvcConfigurer {
+    @Override
+    public void addArgumentResolvers(
+            List<HandlerMethodArgumentResolver> resolvers
+    ) {
+        resolvers.add(new LoginMemberArgumentResolver());
+    }
+}
+```
+
+* `addArgumentResolvers()`
+    * 앞서 개발한 `LoginMemberArgumentResolver`를 등록하자
+
+### 결과
+
+```
+// GET /
+[/][b2041116-3dcc-4773-9809-56283a4acfc3] LogInterceptor preHandle
+LoginMemberArgumentResolver supportsParameter
+LoginMemberArgumentResolver resolveArgument
+[/][b2041116-3dcc-4773-9809-56283a4acfc3] LogInterceptor postHandle
+[/][b2041116-3dcc-4773-9809-56283a4acfc3] LogInterceptor afterComplete
+```
+
+```
+// POST /login
+[/login][603832e0-d125-4b5e-8051-9a1200d220c7] LogInterceptor preHandle
+LoginService: 'test', 'test!'
+login? Member(id=1, loginId=test, name=테스터, password=test!)
+[/login][603832e0-d125-4b5e-8051-9a1200d220c7] LogInterceptor postHandle
+[/login][603832e0-d125-4b5e-8051-9a1200d220c7] LogInterceptor afterComplete
+
+// Redirect /
+[/][c15677ee-d158-4486-9333-d142ca1b68cf] LogInterceptor preHandle
+LoginMemberArgumentResolver resolveArgument
+[/][c15677ee-d158-4486-9333-d142ca1b68cf] LogInterceptor postHandle
+[/][c15677ee-d158-4486-9333-d142ca1b68cf] LogInterceptor afterComplete
+```
+
+### 정리
+
+`ArgumentResolver`를 활용하면, 위처럼 로그인된 멤버를 조회해야 할 때처럼
+**공통 작업이 필요하고 그것을 반환하고 싶을 때** 더욱 편리하게 사용할 수 있게 된다.
