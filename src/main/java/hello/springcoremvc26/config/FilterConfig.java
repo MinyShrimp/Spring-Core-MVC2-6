@@ -4,12 +4,11 @@ import hello.springcoremvc26.web.filter.LogFilter;
 import hello.springcoremvc26.web.filter.LoginCheckFilter;
 import jakarta.servlet.Filter;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class FilterConfig {
-    @Bean
+    // @Bean
     public FilterRegistrationBean<Filter> logFilter() {
         FilterRegistrationBean<Filter> bean = new FilterRegistrationBean<>();
 
@@ -20,7 +19,7 @@ public class FilterConfig {
         return bean;
     }
 
-    @Bean
+    // @Bean
     public FilterRegistrationBean<Filter> loginCheckFilter() {
         FilterRegistrationBean<Filter> bean = new FilterRegistrationBean<>();
 

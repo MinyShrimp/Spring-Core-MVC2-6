@@ -1,18 +1,15 @@
 package hello.springcoremvc26.web.interceptor;
 
+import hello.springcoremvc26.web.SessionConst;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
 
-import java.util.UUID;
-
 @Slf4j
-public class LogInterceptor implements HandlerInterceptor {
-    public static final String LOG_ID = "logId";
-
+public class LoginCheckInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(
             HttpServletRequest request,
@@ -20,17 +17,16 @@ public class LogInterceptor implements HandlerInterceptor {
             Object handler
     ) throws Exception {
         String requestURI = request.getRequestURI();
-        String uuid = UUID.randomUUID().toString();
-        request.setAttribute(LOG_ID, uuid);
+        String uuid = (String) request.getAttribute(LogInterceptor.LOG_ID);
+        log.info("[{}][{}] LoginCheckInterceptor preHandle", requestURI, uuid);
 
-        // @RequestMapping: HandlerMethod
-        // 정적 리소스: ResourceHttpRequestMethod
-        if (handler instanceof HandlerMethod) {
-            // 호출할 컨트롤러 메서드의 모든 정보가 포함되어 있다.
-            HandlerMethod hm = (HandlerMethod) handler;
+        HttpSession session = request.getSession();
+        if (session == null || session.getAttribute(SessionConst.LOGIN_MEMBER) == null) {
+            log.info("미인증 사용자 요청 {}", requestURI);
+            response.sendRedirect("/login?redirectURL=" + requestURI);
+            return false;
         }
 
-        log.info("[{}][{}] LogInterceptor preHandle", requestURI, uuid);
         return true;
     }
 
@@ -42,9 +38,9 @@ public class LogInterceptor implements HandlerInterceptor {
             ModelAndView modelAndView
     ) throws Exception {
         String requestURI = request.getRequestURI();
-        String uuid = (String) request.getAttribute(LOG_ID);
+        String uuid = (String) request.getAttribute(LogInterceptor.LOG_ID);
 
-        log.info("[{}][{}] LogInterceptor postHandle", requestURI, uuid);
+        log.info("[{}][{}] LoginCheckInterceptor postHandle", requestURI, uuid);
     }
 
     @Override
@@ -55,13 +51,8 @@ public class LogInterceptor implements HandlerInterceptor {
             Exception ex
     ) throws Exception {
         String requestURI = request.getRequestURI();
-        String uuid = (String) request.getAttribute(LOG_ID);
+        String uuid = (String) request.getAttribute(LogInterceptor.LOG_ID);
 
-        log.info("[{}][{}] LogInterceptor afterComplete", requestURI, uuid);
-
-        if (ex != null) {
-            log.error("LogInterceptor afterComplete Error: ", ex);
-            ex.printStackTrace();
-        }
+        log.info("[{}][{}] LoginCheckInterceptor afterCompletion", requestURI, uuid);
     }
 }

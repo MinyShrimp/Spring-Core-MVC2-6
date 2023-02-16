@@ -527,10 +527,9 @@ public class LogInterceptor implements HandlerInterceptor {
         if (handler instanceof HandlerMethod) {
             // 호출할 컨트롤러 메서드의 모든 정보가 포함되어 있다.
             HandlerMethod hm = (HandlerMethod) handler;
-            log.info("preHandle [{}][{}][{}]", uuid, requestURI, hm);
-        } else {
-            log.info("preHandle [{}][{}]", uuid, requestURI);
         }
+
+        log.info("[{}][{}] LogInterceptor preHandle", requestURI, uuid);
         return true;
     }
 
@@ -544,7 +543,7 @@ public class LogInterceptor implements HandlerInterceptor {
         String requestURI = request.getRequestURI();
         String uuid = (String) request.getAttribute(LOG_ID);
 
-        log.info("postHandle [{}][{}][{}]", uuid, requestURI, modelAndView);
+        log.info("[{}][{}] LogInterceptor postHandle", requestURI, uuid);
     }
 
     @Override
@@ -557,10 +556,10 @@ public class LogInterceptor implements HandlerInterceptor {
         String requestURI = request.getRequestURI();
         String uuid = (String) request.getAttribute(LOG_ID);
 
-        log.info("afterComplete [{}][{}][{}]", uuid, requestURI, handler);
+        log.info("[{}][{}] LogInterceptor afterComplete", requestURI, uuid);
 
         if (ex != null) {
-            log.error("afterComplete Error: ", ex);
+            log.error("LogInterceptor afterComplete Error: ", ex);
             ex.printStackTrace();
         }
     }
@@ -729,5 +728,150 @@ ext = .jar
 ```
 
 ## 스프링 언터셉터 - 인증 체크
+
+### LoginCheckInterceptor
+
+```java
+@Slf4j
+public class LoginCheckInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler
+    ) throws Exception {
+        String requestURI = request.getRequestURI();
+        String uuid = (String) request.getAttribute(LogInterceptor.LOG_ID);
+        log.info("[{}][{}] LoginCheckInterceptor preHandle", requestURI, uuid);
+
+        HttpSession session = request.getSession();
+        if (session == null || session.getAttribute(SessionConst.LOGIN_MEMBER) == null) {
+            log.info("미인증 사용자 요청 {}", requestURI);
+            response.sendRedirect("/login?redirectURL=" + requestURI);
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public void postHandle(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler,
+            ModelAndView modelAndView
+    ) throws Exception {
+        String requestURI = request.getRequestURI();
+        String uuid = (String) request.getAttribute(LogInterceptor.LOG_ID);
+
+        log.info("[{}][{}] LoginCheckInterceptor postHandle", requestURI, uuid);
+    }
+
+    @Override
+    public void afterCompletion(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler,
+            Exception ex
+    ) throws Exception {
+        String requestURI = request.getRequestURI();
+        String uuid = (String) request.getAttribute(LogInterceptor.LOG_ID);
+
+        log.info("[{}][{}] LoginCheckInterceptor afterCompletion", requestURI, uuid);
+    }
+}
+```
+
+서블릿 필터와 비교해서 코드가 매우 간결하다.
+인증이라는 것은 컨트롤러 호출 전에만 호출되면 된다.
+따라서 `preHandle`만 구현하면 된다.
+
+### InterceptorConfig
+
+```java
+@Configuration
+public class InterceptorConfig implements WebMvcConfigurer {
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new LogInterceptor())
+                .order(1)
+                .addPathPatterns("/**") // 모두 허용
+                .excludePathPatterns("/css/**", "/*.ico", "/error"); // BlackList
+
+        registry.addInterceptor(new LoginCheckInterceptor())
+                .order(2)
+                .addPathPatterns("/**")
+                .excludePathPatterns(
+                        "/", "/members/css", "/login",
+                        "/logout", "/css/**", "*.ico", "/error"
+                );
+    }
+}
+```
+
+인터셉터와 필터가 중복되지 않도록 필터를 등록하기 위한 `logFilter()`, `loginCheckFilter()`의 `@Bean`은 주석처리하자.
+
+인터셉터를 적용하거나 하지 않을 부분은 `addPathPatterns`와 `excludePathPatterns`에 작성하면 된다.
+기본적으로 모든 경로에 해당 인터셉터를 적용하되 (`/**`),
+홈(`/`), 회원가입(`/members/add`), 로그인(`/login`), 리소스 조회(`/css/**`), 오류(`/error`)와 같은 부분은 로그인 체크 인터셉터를 적용하지 않는다.
+
+서블릿 필터와 비교해보면 매우 편리한 것을 알 수 있다.
+
+### 실행 결과
+
+#### 정상 처리
+
+```
+// /login 요청
+[/login][19bad338-e02d-4bbe-8b3a-5dfc55ad4428] LogInterceptor preHandle
+LoginService: 'test', 'test!'
+login? Member(id=1, loginId=test, name=테스터, password=test!)
+[/login][19bad338-e02d-4bbe-8b3a-5dfc55ad4428] LogInterceptor postHandle
+[/login][19bad338-e02d-4bbe-8b3a-5dfc55ad4428] LogInterceptor afterComplete
+
+// Redirect - /items
+[/items][679dc279-ff3a-4ee3-a424-26b18ac8dbbd] LogInterceptor preHandle
+[/items][679dc279-ff3a-4ee3-a424-26b18ac8dbbd] LoginCheckInterceptor preHandle
+[/items][679dc279-ff3a-4ee3-a424-26b18ac8dbbd] LoginCheckInterceptor postHandle
+[/items][679dc279-ff3a-4ee3-a424-26b18ac8dbbd] LogInterceptor postHandle
+[/items][679dc279-ff3a-4ee3-a424-26b18ac8dbbd] LoginCheckInterceptor afterCompletion
+[/items][679dc279-ff3a-4ee3-a424-26b18ac8dbbd] LogInterceptor afterComplete
+```
+
+LogInterceptor preHandle -> LoginCheckInterceptor preHandle
+-> LoginCheckInterceptor postHandle -> LogInterceptor postHandle
+-> LoginCheckInterceptor afterCompletion -> LogInterceptor afterComplete
+-> 종료
+
+> **주의!**<br>
+> `preHandle`의 경우 `order`에 설정한 대로 호출이 되지만,
+> `postHandle`과 `afterCompletion`의 경우 **반대로 호출**이 된다.
+
+#### 미인증 처리
+
+```
+// /items 요청
+[/items][45e50a37-57a0-4298-b50e-e42141005426] LogInterceptor preHandle
+[/items][45e50a37-57a0-4298-b50e-e42141005426] LoginCheckInterceptor preHandle
+미인증 사용자 요청 /items
+[/items][45e50a37-57a0-4298-b50e-e42141005426] LogInterceptor afterComplete
+
+// Redirect - /login
+[/login][18f052ab-b849-4690-83ec-43866660f570] LogInterceptor preHandle
+[/login][18f052ab-b849-4690-83ec-43866660f570] LogInterceptor postHandle
+[/login][18f052ab-b849-4690-83ec-43866660f570] LogInterceptor afterComplete
+```
+
+LogInterceptor preHandle -> LoginCheckInterceptor preHandle -> return false;
+-> LogInterceptor afterComplete -> 종료
+
+> **주의!**<br>
+> `preHandle`에서 `return false;`을 할 경우(비 정상 리턴), **해당 인터셉터의 `afterComplete`는 호출되지 않는다.**
+
+### 정리
+
+서블릿 필터와 스프링 인터셉터는 웹과 관련된 공통 관심사를 해결하기 위한 기술이다.
+서블릿 필터와 비교해서 스프링 인터셉터가 개발자 입장에서 훨씬 편리하다는 것을 코드로 이해했을 것이다.
+특별한 문제가 없다면 인터셉터를 사용하는 것이 좋다.
 
 ## ArgumentResolver 활용
