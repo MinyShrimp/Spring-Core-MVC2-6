@@ -7,6 +7,7 @@
     * https://github.com/MinyShrimp/Spring-Core-MVC2-1
     * https://github.com/MinyShrimp/Spring-Core-MVC2-2
     * https://github.com/MinyShrimp/Spring-Core-MVC2-6
+    * https://github.com/MinyShrimp/Spring-Core-MVC2-8
 
 ## [로그인 처리 1 - 쿠키, 세션](./강의/6강)
 
