@@ -505,6 +505,229 @@ public interface HandlerInterceptor {
 
 ## 스프링 인터셉터 - 요청 로그
 
+### LogInterceptor
+
+```java
+@Slf4j
+public class LogInterceptor implements HandlerInterceptor {
+    public static final String LOG_ID = "logId";
+
+    @Override
+    public boolean preHandle(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler
+    ) throws Exception {
+        String requestURI = request.getRequestURI();
+        String uuid = UUID.randomUUID().toString();
+        request.setAttribute(LOG_ID, uuid);
+
+        // @RequestMapping: HandlerMethod
+        // 정적 리소스: ResourceHttpRequestMethod
+        if (handler instanceof HandlerMethod) {
+            // 호출할 컨트롤러 메서드의 모든 정보가 포함되어 있다.
+            HandlerMethod hm = (HandlerMethod) handler;
+            log.info("preHandle [{}][{}][{}]", uuid, requestURI, hm);
+        } else {
+            log.info("preHandle [{}][{}]", uuid, requestURI);
+        }
+        return true;
+    }
+
+    @Override
+    public void postHandle(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler,
+            ModelAndView modelAndView
+    ) throws Exception {
+        String requestURI = request.getRequestURI();
+        String uuid = (String) request.getAttribute(LOG_ID);
+
+        log.info("postHandle [{}][{}][{}]", uuid, requestURI, modelAndView);
+    }
+
+    @Override
+    public void afterCompletion(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler,
+            Exception ex
+    ) throws Exception {
+        String requestURI = request.getRequestURI();
+        String uuid = (String) request.getAttribute(LOG_ID);
+
+        log.info("afterComplete [{}][{}][{}]", uuid, requestURI, handler);
+
+        if (ex != null) {
+            log.error("afterComplete Error: ", ex);
+            ex.printStackTrace();
+        }
+    }
+}
+```
+
+* `String uuid = UUID.randomUUID().toString()`
+    * 요청 로그를 구분하기 위한 uuid 를 생성한다.
+* `request.setAttribute(LOG_ID, uuid)`
+    * 서블릿 필터의 경우 지역변수로 해결이 가능하지만, 스프링 인터셉터는 호출 시점이 완전히 분리되어있다.
+    * 따라서 `preHandle`에서 지정한 값을 `postHandle`, `afterCompletion`에서 함께 사용하려면 어딘가에 담아두어야 한다.
+    * `LogInterceptor`도 싱글톤 처럼 사용되기 때문에 맴버변수를 사용하면 위험하다. 따라서 `request`에 담아두었다.
+    * 이 값은 `afterCompletion`에서 `request.getAttribute(LOG_ID)`로 찾아서 사용한다.
+* `return true`
+    * `true`면 정상 호출이다.
+    * 다음 인터셉터나 컨트롤러가 호출된다.
+
+#### HandlerMethod
+
+```java
+if (handler instanceof HandlerMethod) {
+    // 호출할 컨트롤러 메서드의 모든 정보가 포함되어 있다.
+    HandlerMethod hm = (HandlerMethod) handler;
+}
+```
+
+핸들러 정보는 어떤 핸들러 매핑을 사용하는가에 따라 달라진다.
+스프링을 사용하면 일반적으로 `@Controller` , `@RequestMapping`을 활용한 핸들러 매핑을 사용하는데,
+이 경우 핸들러 정보로 `HandlerMethod`가 넘어온다.
+
+#### ResourceHttpRequestHandler
+
+`@Controller`가 아니라 `/resources/static`와 같은 정적 리소스가 호출 되는 경우
+`ResourceHttpRequestHandler`가 핸들러 정보로 넘어오기 때문에 타입에 따라서 처리가 필요하다.
+
+#### postHandle, afterCompletion
+
+종료 로그를 `postHandle`이 아니라 `afterCompletion`에서 실행한 이유는, 예외가 발생한 경우 `postHandle`가 호출되지 않기 때문이다.
+`afterCompletion`은 예외가 발생해도 호출 되는 것을 보장한다.
+
+### InterceptorConfig
+
+```java
+@Configuration
+public class InterceptorConfig implements WebMvcConfigurer {
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new LogInterceptor())
+                .order(1)                                             // 우선 순위
+                .addPathPatterns("/**")                               // 모두 허용
+                .excludePathPatterns("/css/**", "/*.ico", "/error");  // BlackList
+    }
+}
+```
+
+* `addInterceptors`
+    * `WebMvcConfigurer`가 제공하는 `addInterceptors()`를 사용해서 인터셉터를 등록할 수 있다.
+
+* `registry.addInterceptor(new LogInterceptor())`
+    * 인터셉터를 등록한다.
+* order(1)
+    * 인터셉터의 호출 순서를 지정한다. 낮을 수록 먼저 호출된다.
+* `addPathPatterns("/**")`
+    * 인터셉터를 적용할 URL 패턴을 지정한다.
+* `excludePathPatterns("/css/**", "/*.ico", "/error")`
+    * 인터셉터에서 제외할 패턴을 지정한다.
+
+필터와 비교해보면 인터셉터는 `addPathPatterns`, `excludePathPatterns`로 매우 정밀하게 URL 패턴을 지정할 수 있다.
+
+### 결과
+
+```
+h.springcoremvc26.web.filter.LogFilter   : log filter: doFilter
+h.springcoremvc26.web.filter.LogFilter   : REQUEST [f57d04f2-85b0-4cd7-bfef-38c157e71c97][/]
+h.s.web.filter.LoginCheckFilter          : 인증 체크 필터 시작 /
+h.s.web.interceptor.LogInterceptor       : preHandle [c5a5dc1e-9026-432d-b0aa-798e343e3f46][/][hello.springcoremvc26.web.HomeController#homeLogin(Member, Model)]
+h.s.web.interceptor.LogInterceptor       : postHandle [c5a5dc1e-9026-432d-b0aa-798e343e3f46][/][ModelAndView [view="home"; model={}]]
+h.s.web.interceptor.LogInterceptor       : afterComplete [c5a5dc1e-9026-432d-b0aa-798e343e3f46][/][hello.springcoremvc26.web.HomeController#homeLogin(Member, Model)]
+h.s.web.filter.LoginCheckFilter          : 인증 체크 필터 종료 /
+h.springcoremvc26.web.filter.LogFilter   : RESPONSE [f57d04f2-85b0-4cd7-bfef-38c157e71c97][/]
+```
+
+### 스프링의 URL 경로
+
+스프링이 제공하는 URL 경로는 서블릿 기술이 제공하는 URL 경로와 완전히 다르다.
+더욱 자세하고, 세밀하게 설정할 수 있다.
+
+#### [PathPattern 공식 문서](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/util/pattern/PathPattern.html)
+
+* `?`: 한 문자 일치
+    * `/pages/t?st.html`
+        * YES: `/pages/test.html`, `/pages/tXst.html`
+        * NO : `/pages/toast.html`
+* `*`: 경로(/) 안에서 0개 이상의 문자 일치
+    * `/resources/*.png`
+        * YES: `/resources/photo.png`
+        * NO : `/resources/favority.ico`
+* `**`: 현재 경로 + 하위 경로에서 0개 이상의 문자 일치
+    * `/resources/**`
+        * YES: `/resources/image.png`, `/resources/css/spring.css`
+* `{spring}`: 경로 일치 + spring 이라는 변수로 캡처
+    * `/resources/{path}`
+        * `/resources/robot.txt` -> `path`변수에 "robot.txt" 할당
+        * `@PathVariable("path")`로 접근 가능
+* `{*spring}`: 하위 경로 끝까지 `spring`변수에 캡쳐
+    * `/items/{*path}`
+        * `/items/1/add` -> `path`변수에 "/1/add" 할당
+* `{spring:[a-z]+}`: 정규식 이용
+    * `/items/{path:[a-z]+}`
+        * YES: `/items/robots`
+        * NO : `/items/123`
+
+#### 예제 1 - `{*spring}`
+
+```java
+@GetMapping("/hello/{*name}")
+@ResponseBody
+public String handleTest(
+        @PathVariable String name
+) {
+    log.info("name = " + name);
+    return name;
+}
+```
+
+```
+===
+
+GET http://localhost:8080/hello/path-test
+->
+name = /path-test
+
+===
+
+GET http://localhost:8080/hello/path-test/other
+->
+name = /path-test/other
+
+===
+```
+
+#### 예제 2 - 정규식
+
+```java
+@GetMapping("/static/{name:[a-z-]+}-{version:\\d\\.\\d\\.\\d}{ext:\\.[a-z]+}")
+@ResponseBody
+public String handle(
+        @PathVariable String name, 
+        @PathVariable String version, 
+        @PathVariable String ext
+) {
+    log.info("name = " + name);
+    log.info("version = " + version);
+    log.info("ext = " + ext);
+    
+    return "/" + name + "/" + version + "/" + ext;
+}
+```
+
+```
+GET http://localhost:8080/pathtest-1.0.0.jar
+->
+name = pathtest
+version = 1.0.0
+ext = .jar
+```
+
 ## 스프링 언터셉터 - 인증 체크
 
 ## ArgumentResolver 활용
