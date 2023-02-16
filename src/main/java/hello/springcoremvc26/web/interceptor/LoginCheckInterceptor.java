@@ -17,12 +17,12 @@ public class LoginCheckInterceptor implements HandlerInterceptor {
             Object handler
     ) throws Exception {
         String requestURI = request.getRequestURI();
-        String uuid = (String) request.getAttribute(LogInterceptor.LOG_ID);
+        String uuid = (String) request.getAttribute(SessionConst.LOG_ID);
         log.info("[{}][{}] LoginCheckInterceptor preHandle", requestURI, uuid);
 
         HttpSession session = request.getSession();
         if (session == null || session.getAttribute(SessionConst.LOGIN_MEMBER) == null) {
-            log.info("미인증 사용자 요청 {}", requestURI);
+            log.info("[{}][{}] 미인증 사용자 요청", requestURI, uuid);
             response.sendRedirect("/login?redirectURL=" + requestURI);
             return false;
         }
@@ -38,7 +38,7 @@ public class LoginCheckInterceptor implements HandlerInterceptor {
             ModelAndView modelAndView
     ) throws Exception {
         String requestURI = request.getRequestURI();
-        String uuid = (String) request.getAttribute(LogInterceptor.LOG_ID);
+        String uuid = (String) request.getAttribute(SessionConst.LOG_ID);
 
         log.info("[{}][{}] LoginCheckInterceptor postHandle", requestURI, uuid);
     }
@@ -51,7 +51,7 @@ public class LoginCheckInterceptor implements HandlerInterceptor {
             Exception ex
     ) throws Exception {
         String requestURI = request.getRequestURI();
-        String uuid = (String) request.getAttribute(LogInterceptor.LOG_ID);
+        String uuid = (String) request.getAttribute(SessionConst.LOG_ID);
 
         log.info("[{}][{}] LoginCheckInterceptor afterCompletion", requestURI, uuid);
     }

@@ -1,5 +1,6 @@
 package hello.springcoremvc26.web.filter;
 
+import hello.springcoremvc26.web.SessionConst;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -13,12 +14,12 @@ public class LogFilter implements Filter {
     public void init(
             FilterConfig filterConfig
     ) throws ServletException {
-        log.info("log filter: init");
+        log.info("LogFilter init()");
     }
 
     @Override
     public void destroy() {
-        log.info("log filter: destroy");
+        log.info("LogFilter destroy()");
     }
 
     @Override
@@ -27,21 +28,21 @@ public class LogFilter implements Filter {
             ServletResponse response,
             FilterChain chain
     ) throws IOException, ServletException {
-        log.info("log filter: doFilter");
-
         HttpServletRequest req = (HttpServletRequest) request;
         String requestURI = req.getRequestURI();
 
         String uuid = UUID.randomUUID().toString();
+        req.setAttribute(SessionConst.LOG_ID, uuid);
+
+        log.info("[{}][{}] LogFilter doFilter Start", requestURI, uuid);
 
         try {
-            log.info("REQUEST [{}][{}]", uuid, requestURI);
             chain.doFilter(request, response);
         } catch (Exception e) {
-            log.error("Filter Error: [{}]", (Object) e.getStackTrace());
+            log.error("[{}][{}] Filter Error: [{}]", requestURI, uuid, e.toString());
             throw e;
         } finally {
-            log.info("RESPONSE [{}][{}]", uuid, requestURI);
+            log.info("[{}][{}] LogFilter doFilter End", requestURI, uuid);
         }
     }
 }

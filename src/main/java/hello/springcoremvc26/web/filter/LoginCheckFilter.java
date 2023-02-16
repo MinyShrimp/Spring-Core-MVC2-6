@@ -15,6 +15,18 @@ public class LoginCheckFilter implements Filter {
     private static final String[] whitelist = {"/", "/members/add", "/login", "/logout", "/css/*"};
 
     @Override
+    public void init(
+            FilterConfig filterConfig
+    ) throws ServletException {
+        log.info("LoginCheckFilter init()");
+    }
+
+    @Override
+    public void destroy() {
+        log.info("LoginCheckFilter destroy()");
+    }
+
+    @Override
     public void doFilter(
             ServletRequest request,
             ServletResponse response,
@@ -24,16 +36,17 @@ public class LoginCheckFilter implements Filter {
         HttpServletResponse resp = (HttpServletResponse) response;
 
         String requestURI = req.getRequestURI();
+        String uuid = (String) req.getAttribute(SessionConst.LOG_ID);
 
         try {
-            log.info("인증 체크 필터 시작 {}", requestURI);
+            log.info("[{}][{}] LoginFilter doFilter Start", requestURI, uuid);
 
             if (isLoginCheckPath(requestURI)) {
-                log.info("인증 체크 로직 실행 {}", requestURI);
+                log.info("[{}][{}] 인증 체크 로직 실행", requestURI, uuid);
 
                 HttpSession session = req.getSession(false);
                 if (session == null || session.getAttribute(SessionConst.LOGIN_MEMBER) == null) {
-                    log.info("미인증 사용자 요청 {}", requestURI);
+                    log.info("[{}][{}] 미인증 사용자 요청", requestURI, uuid);
                     resp.sendRedirect("/login?redirectURL=" + requestURI);
                     return;
                 }
@@ -42,10 +55,10 @@ public class LoginCheckFilter implements Filter {
             chain.doFilter(request, response);
         } catch (Exception e) {
             // 예외 로깅 가능하지만, 톰캣까지 예외를 보내주어야함.
-            log.error(e.getStackTrace().toString());
+            log.error(e.toString());
             throw e;
         } finally {
-            log.info("인증 체크 필터 종료 {}", requestURI);
+            log.info("[{}][{}] LoginFilter doFilter End", requestURI, uuid);
         }
     }
 

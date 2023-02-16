@@ -1,5 +1,6 @@
 package hello.springcoremvc26.web.interceptor;
 
+import hello.springcoremvc26.web.SessionConst;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -7,11 +8,8 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
 
-import java.util.UUID;
-
 @Slf4j
 public class LogInterceptor implements HandlerInterceptor {
-    public static final String LOG_ID = "logId";
 
     @Override
     public boolean preHandle(
@@ -20,8 +18,7 @@ public class LogInterceptor implements HandlerInterceptor {
             Object handler
     ) throws Exception {
         String requestURI = request.getRequestURI();
-        String uuid = UUID.randomUUID().toString();
-        request.setAttribute(LOG_ID, uuid);
+        String uuid = (String) request.getAttribute(SessionConst.LOG_ID);
 
         // @RequestMapping: HandlerMethod
         // 정적 리소스: ResourceHttpRequestMethod
@@ -42,7 +39,7 @@ public class LogInterceptor implements HandlerInterceptor {
             ModelAndView modelAndView
     ) throws Exception {
         String requestURI = request.getRequestURI();
-        String uuid = (String) request.getAttribute(LOG_ID);
+        String uuid = (String) request.getAttribute(SessionConst.LOG_ID);
 
         log.info("[{}][{}] LogInterceptor postHandle", requestURI, uuid);
     }
@@ -55,7 +52,7 @@ public class LogInterceptor implements HandlerInterceptor {
             Exception ex
     ) throws Exception {
         String requestURI = request.getRequestURI();
-        String uuid = (String) request.getAttribute(LOG_ID);
+        String uuid = (String) request.getAttribute(SessionConst.LOG_ID);
 
         log.info("[{}][{}] LogInterceptor afterComplete", requestURI, uuid);
 
